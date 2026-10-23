@@ -1,4 +1,4 @@
-package de.fhdw.projekt;
+package de.fhdw.project;
 
 public class ProjectApplication {
 
