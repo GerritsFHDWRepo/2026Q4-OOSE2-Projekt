@@ -1,5 +1,5 @@
 # 2026Q4-OOSE-2-Projekt
-Projektarbeit im dritten Semester (2026Q4) während objektorientierte Softwaretechnik 2.
+Projektarbeit im dritten Semester (2026Q4) während objektorientierte Softwaretechnik  2.
 
 ## Regeln/Richtlinien
 
