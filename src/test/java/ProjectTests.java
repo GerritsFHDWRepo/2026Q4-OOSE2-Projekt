@@ -14,26 +14,26 @@ public class ProjectTests {
 
     @Test
     @DisplayName("Kapazität 0 wirft IllegalArgumentException")
-    void kapazitaetNullWirftException() {
+    void capacityZeroThrowsException() {
         assertThrows(IllegalArgumentException.class, () -> new Queue(0));
     }
 
     @Test
     @DisplayName("Negative Kapazität wirft IllegalArgumentException")
-    void negativeKapazitaetWirftException() {
+    void negativeCapacityThrowsException() {
         assertThrows(IllegalArgumentException.class, () -> new Queue(-5));
     }
 
     @Test
     @DisplayName("Kapazität 1 ist erlaubt (Grenzwert)")
-    void kapazitaetEinsIstErlaubt() {
+    void capacityOneIsAllowed() {
         Queue queue = new Queue(1);
         assertEquals(1, queue.capacity());
     }
 
     @Test
     @DisplayName("Neue Queue ist leer")
-    void neueQueueIstLeer() {
+    void newQueueIsEmpty() {
         assertEquals(0, new Queue(5).size());
     }
 
@@ -43,7 +43,7 @@ public class ProjectTests {
 
     @Test
     @DisplayName("put erhöht die Größe um 1")
-    void putErhoehtGroesse() throws InterruptedException {
+    void putIncreasesSize() throws InterruptedException {
         Queue queue = new Queue(5);
         queue.put(42);
         assertEquals(1, queue.size());
@@ -51,7 +51,7 @@ public class ProjectTests {
 
     @Test
     @DisplayName("get liefert den abgelegten Wert und verringert die Größe")
-    void getLiefertAbgelegtenWert() throws InterruptedException {
+    void getReturnsStoredValue() throws InterruptedException {
         Queue queue = new Queue(5);
         queue.put(42);
         assertEquals(42, queue.get());
@@ -64,7 +64,7 @@ public class ProjectTests {
 
     @Test
     @DisplayName("Werte kommen in korrekten Reihenfolge heraus (FIFO)")
-    void fifoReihenfolge() throws InterruptedException {
+    void valuesComeOutInFifoOrder() throws InterruptedException {
         Queue queue = new Queue(3);
         queue.put(1);
         queue.put(2);
@@ -76,7 +76,7 @@ public class ProjectTests {
 
     @Test
     @DisplayName("Queue kann bis zur Kapazität befüllt werden, ohne zu blockieren")
-    void befuellenBisKapazitaetBlockiertNicht() {
+    void fillingToCapacityDoesNotBlock() {
         Queue queue = new Queue(5);
         assertTimeoutPreemptively(TIMEOUT, () -> {
             for (int i = 0; i < 5; i++) {
@@ -88,7 +88,7 @@ public class ProjectTests {
 
     @Test
     @DisplayName("FIFO bleibt erhalten, wenn die Queue mehrfach durchläuft")
-    void queueDurchlauf() throws InterruptedException {
+    void queueCycling() throws InterruptedException {
         Queue queue = new Queue(3);
         int next = 0;
         int expected = 0;
