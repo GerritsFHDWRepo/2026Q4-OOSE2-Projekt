@@ -1,13 +1,15 @@
 import static org.junit.jupiter.api.Assertions.*;
 
-        import java.time.Duration;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
 
 import de.fhdw.project.ProjectApplication;
+import de.fhdw.project.Queue;
+import de.fhdw.project.Producer;
+import de.fhdw.project.Consumer;
+import de.fhdw.project.Viewer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -58,7 +60,7 @@ public class ProjectTests {
     @Test
     @DisplayName("Producer puts exactly N values into the queue")
     void producerPutsExactlyNValues() throws InterruptedException {
-        BlockingQueue<Integer> queue = new LinkedBlockingQueue<>(Producer.N);
+        Queue queue = new Queue(Producer.N);
         Producer producer = new Producer("P", queue);
 
         producer.start();
@@ -66,13 +68,13 @@ public class ProjectTests {
 
         assertFalse(producer.isAlive());
         assertEquals(Producer.N, queue.size());
-        assertEquals(producer.getProduced(), new ArrayList<>(queue));
+        assertArrayEquals(producer.getProduced(), queue.toArrayList());
     }
 
     @Test
     @DisplayName("Producer waits when the queue is full")
     void producerWaitsWhenQueueIsFull() throws InterruptedException {
-        BlockingQueue<Integer> queue = new LinkedBlockingQueue<>(1);
+        Queue queue = new Queue(1);
         Producer producer = new Producer("P", queue);   // kein Consumer vorhanden
 
         producer.start();
@@ -88,7 +90,7 @@ public class ProjectTests {
         producer.interrupt();
         producer.join(TIMEOUT.toMillis());
         assertFalse(producer.isAlive());
-        assertEquals(1, producer.getProduced().size());
+        assertEquals(1, producer.getProduced().length);
     }
 
     // ------------------------------------------------------------------
@@ -98,7 +100,7 @@ public class ProjectTests {
     @Test
     @DisplayName("Consumer takes exactly N values in FIFO order")
     void consumerTakesExactlyNValuesInFifoOrder() throws InterruptedException {
-        BlockingQueue<Integer> queue = new LinkedBlockingQueue<>(Producer.N);
+        Queue queue = new Queue(Producer.N);
         List<Integer> expected = new ArrayList<>();
         for (int i = 0; i < Producer.N; i++) {
             queue.put(i);
@@ -110,14 +112,14 @@ public class ProjectTests {
         consumer.join(TIMEOUT.toMillis());
 
         assertFalse(consumer.isAlive());
-        assertEquals(expected, consumer.getConsumed());
+        assertArrayEquals(expected.toArray(), consumer.getConsumed());
         assertEquals(0, queue.size());
     }
 
     @Test
     @DisplayName("Consumer waits when the queue is empty")
     void consumerWaitsWhenQueueIsEmpty() throws InterruptedException {
-        BlockingQueue<Integer> queue = new LinkedBlockingQueue<>(1);
+        Queue queue = new Queue(1);
         Consumer consumer = new Consumer("C", queue);   // kein Producer vorhanden
 
         consumer.start();
@@ -132,7 +134,7 @@ public class ProjectTests {
         consumer.interrupt();
         consumer.join(TIMEOUT.toMillis());
         assertFalse(consumer.isAlive());
-        assertTrue(consumer.getConsumed().isEmpty());
+        assertEquals(0, consumer.getConsumed().length);
     }
 
     // ------------------------------------------------------------------
@@ -142,7 +144,7 @@ public class ProjectTests {
     @Test
     @DisplayName("Values arrive in the order they were produced")
     void valuesArriveInProducedOrder() throws InterruptedException {
-        BlockingQueue<Integer> queue = new LinkedBlockingQueue<>(2);
+        Queue queue = new Queue(2);
         Producer producer = new Producer("P", queue);
         Consumer consumer = new Consumer("C", queue);
 
@@ -153,14 +155,14 @@ public class ProjectTests {
 
         assertFalse(producer.isAlive());
         assertFalse(consumer.isAlive());
-        assertEquals(producer.getProduced(), consumer.getConsumed());
+        assertArrayEquals(producer.getProduced(), consumer.getConsumed());
         assertEquals(0, queue.size());
     }
 
     @Test
     @DisplayName("Capacity 1 behaves like the buffer from the lecture")
     void capacityOneBehavesLikeBuffer() throws InterruptedException {
-        BlockingQueue<Integer> queue = new LinkedBlockingQueue<>(1);
+        Queue queue = new Queue(1);
         Producer producer = new Producer("P", queue);
         Consumer consumer = new Consumer("C", queue);
 
@@ -171,7 +173,7 @@ public class ProjectTests {
 
         assertFalse(producer.isAlive());
         assertFalse(consumer.isAlive());
-        assertEquals(producer.getProduced(), consumer.getConsumed());
+        assertArrayEquals(producer.getProduced(), consumer.getConsumed());
         assertEquals(0, queue.size());
     }
 
@@ -182,7 +184,7 @@ public class ProjectTests {
     @Test
     @DisplayName("Viewer does not modify the queue")
     void viewerDoesNotModifyQueue() throws InterruptedException {
-        BlockingQueue<Integer> queue = new LinkedBlockingQueue<>(5);
+        Queue queue = new Queue(5);
         queue.put(1);
         queue.put(2);
         queue.put(3);
@@ -193,12 +195,12 @@ public class ProjectTests {
         viewer.interrupt();
         viewer.join(1000);
 
-        assertEquals(List.of(1, 2, 3), new ArrayList<>(queue));
+        assertArrayEquals(new Integer[]{1, 2, 3}, queue.toArrayList());
     }
     @Test
     @DisplayName("Viewer handles an empty queue and stops when interrupted")
     void viewerStopsWhenInterrupted() throws InterruptedException {
-        BlockingQueue<Integer> queue = new LinkedBlockingQueue<>(5);
+        Queue queue = new Queue(5);
         Viewer viewer = new Viewer(queue);
 
         viewer.start();
@@ -229,7 +231,7 @@ public class ProjectTests {
     @Test
     @DisplayName("Multiple producers and consumers: every value arrives exactly once")
     void multipleProducersAndConsumersLoseNoValues() {
-        BlockingQueue<Integer> queue = new LinkedBlockingQueue<>(2);
+        Queue queue = new Queue(2);
         List<Producer> producers = new ArrayList<>();
         List<Consumer> consumers = new ArrayList<>();
         // Erstellt jeweils 3 Producer und 3 Consumer.
@@ -259,10 +261,10 @@ public class ProjectTests {
         List<Integer> allConsumed = new ArrayList<>();
 
         for (Producer p : producers)
-            allProduced.addAll(p.getProduced());
+            Collections.addAll(allProduced, p.getProduced());
 
         for (Consumer c : consumers)
-            allConsumed.addAll(c.getConsumed());
+            Collections.addAll(allConsumed, c.getConsumed());
 
         // Sortieren ermöglicht einen einfachen Vergleich der Inhalte.
         Collections.sort(allProduced);
@@ -287,7 +289,7 @@ public class ProjectTests {
         // 3 Produzern und
         // 3 Consumern.
         // Der Test schlägt fehl, falls das System nicht rechtzeitig beendet wird.
-        BlockingQueue<Integer> queue = assertTimeoutPreemptively(TIMEOUT, () -> {
+        Queue queue = assertTimeoutPreemptively(TIMEOUT, () -> {
             return ProjectApplication.runSystem(5, 3, 3);
         });
 
