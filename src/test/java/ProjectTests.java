@@ -9,7 +9,6 @@ import de.fhdw.project.ProjectApplication;
 import de.fhdw.project.Queue;
 import de.fhdw.project.Producer;
 import de.fhdw.project.Consumer;
-import de.fhdw.project.Viewer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -68,7 +67,7 @@ public class ProjectTests {
 
         assertFalse(producer.isAlive());
         assertEquals(Producer.N, queue.size());
-        assertArrayEquals(producer.getProduced(), queue.toArrayList());
+        assertArrayEquals(producer.getProduced(), queue.toArray());
     }
 
     @Test
@@ -195,7 +194,7 @@ public class ProjectTests {
         viewer.interrupt();
         viewer.join(1000);
 
-        assertArrayEquals(new Integer[]{1, 2, 3}, queue.toArrayList());
+        assertArrayEquals(new Integer[]{1, 2, 3}, queue.toArray());
     }
     @Test
     @DisplayName("Viewer handles an empty queue and stops when interrupted")
