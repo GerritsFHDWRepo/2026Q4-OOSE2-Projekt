@@ -4,35 +4,54 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
+/**
+ * Dies ist ein Produzent, der Elemente zu unserer eigenen {@link Queue} hinzufügen kann.
+ */
 public class Producer extends Thread {
 
-    public static final int N = 5;
-
-    private final String name;
     private final Queue queue;
     private final List<Integer> history = new ArrayList<>();
+    private final int actionAmount;
 
-    public Producer(String name, Queue queue){
-        this.name = name;
+    public Producer(String name, Queue queue, int actionAmount){
+        super(name);
         this.queue = queue;
+        this.actionAmount = actionAmount;
     }
 
+    /**
+     * Führt den Producer mit der gewünschten Anzahl der Aktionen aus.
+     * Dabei fügt er diese Aktionen auch in seine Historie ein.
+     */
     @Override
     public void run() {
         try {
-            for (int i = 0; i < N; i++) {
-                Random random = new Random();
+            Random random = new Random();
+
+            for (int i = 0; i < actionAmount; i++) {
                 int inserted = random.nextInt();
                 this.queue.put(inserted);
-                history.add(inserted);
+
+                synchronized (history) {
+                    history.add(inserted);
+                }
+
+                System.out.println(getName() + " produziert: " + inserted);
             }
         } catch (InterruptedException e) {
             System.out.println("Producer thread interrupted");
         }
     }
 
+    /**
+     * Funktion zum Ausgeben der Historie dieses Producers.
+     *
+     * @return Historie als Integer Array
+     */
     public Integer[] getProduced() {
-        return this.history.toArray(new Integer[0]);
+        synchronized (history) {
+            return this.history.toArray(new Integer[0]);
+        }
     }
 
 }
