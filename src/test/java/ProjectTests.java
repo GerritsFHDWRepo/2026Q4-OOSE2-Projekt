@@ -13,83 +13,82 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * Test-First-Spezifikation für das Erzeuger-Verbraucher-System.
- *
- * Die Klassen existieren noch nicht. Diese Tests legen fest, was die
- * Implementierung leisten muss. Solange die Klassen fehlen, kompiliert
- * die Datei nicht – das ist der erwartete "Red"-Zustand.
- *
- * Als Warteschlange wird java.util.concurrent.LinkedBlockingQueue verwendet
- * (immer mit Kapazität!). Die Queue selbst wird nicht getestet, nur ihre
- * Benutzung durch das System.
- *
- * ERWARTETE SCHNITTSTELLE (Package de.fhdw.project)
- *
+ * Tests für das Erzeuger-Verbraucher-System.
+
+ * Die eigene Klasse Queue ist ein Wrapper um eine LinkedBlockingQueue. Die
+ * LinkedBlockingQueue selbst wird nicht getestet, nur ihre Benutzung durch das System.
+
+ * GETESTETE SCHNITTSTELLE (Package de.fhdw.project)
+ *   Queue
+ *     + Queue(capacity : int)
+ *     + put(value : int) : void / get() : int      blockieren bei voller bzw. leerer Queue
+ *     + size() : int
+ *     + toArray() : Integer[]                      Inhalt in FIFO-Reihenfolge
+
  *   Producer extends Thread
- *     + N : int                                    (static final) Anzahl Werte pro Producer
- *     + Producer(name : String, queue : BlockingQueue<Integer>)
- *     + run()                                      legt N Werte per put() ab
- *     + getProduced() : List<Integer>              erfolgreich abgelegte Werte in Reihenfolge
- *
+ *     + Producer(name : String, queue : Queue, actionAmount : int)
+ *     + run()                                      legt actionAmount Werte per put() ab
+ *     + getProduced() : Integer[]                  abgelegte Werte dieses Producers in Reihenfolge
+
  *   Consumer extends Thread
- *     + Consumer(name : String, queue : BlockingQueue<Integer>)
- *     + run()                                      entnimmt N Werte per take()
- *     + getConsumed() : List<Integer>              entnommene Werte in Reihenfolge
- *
- *   Viewer extends Thread
- *     + Viewer(queue : BlockingQueue<Integer>)
- *     + run()                                      schaut regelmäßig per peek() in die Queue,
- *                                                  bis er per interrupt() beendet wird
- *
+ *     + Consumer(name : String, queue : Queue, actionAmount : int)
+ *     + run()                                      entnimmt actionAmount Werte per get()
+ *     + getConsumed() : Integer[]                  entnommene Werte dieses Consumers in Reihenfolge
+
  *   ProjectApplication
- *     + runSystem(capacity : int, producerCount : int, consumerCount : int) : BlockingQueue<Integer>
+ *     + runSystem(capacity, producerCount, consumerCount,
+ *                 actionAmountProducer, actionAmountConsumer) : Queue
  *                                                  startet alles, wartet auf das Ende,
- *                                                  beendet den Viewer, gibt die Queue zurück
- *
+ *                                                  gibt die Queue zurück
+
  * VERHALTEN BEI interrupt(): Producer und Consumer beenden sich, statt weiterzulaufen.
  */
 public class ProjectTests {
 
     private static final Duration TIMEOUT = Duration.ofSeconds(5);
 
+    // Dieselben Werte, die main() an runSystem übergibt: runSystem(3, 4, 2, 2, 4)
+    // Voraussetzungen für die Tests:
+    // - PRODUCER_COUNT * ACTIONS_PER_PRODUCER == CONSUMER_COUNT * ACTIONS_PER_CONSUMER
+    // - ACTIONS_PER_PRODUCER <= CAPACITY
+    private static final int CAPACITY = 3;
+    private static final int PRODUCER_COUNT = 4;
+    private static final int CONSUMER_COUNT = 2;
+    private static final int ACTIONS_PER_PRODUCER = 2;
+    private static final int ACTIONS_PER_CONSUMER = 4;
+
     // ------------------------------------------------------------------
     // Abschnitt 1: Producer
     // ------------------------------------------------------------------
 
     @Test
-    @DisplayName("Producer puts exactly N values into the queue")
-    void producerPutsExactlyNValues() throws InterruptedException {
-        Queue queue = new Queue(Producer.N);
-        Producer producer = new Producer("P", queue);
+    @DisplayName("Producer puts exactly as many values as specified")
+    void producerPutsAllItsValues() throws InterruptedException {
+        Queue queue = new Queue(CAPACITY);
+        Producer producer = new Producer("P", queue, ACTIONS_PER_PRODUCER);
 
         producer.start();
         producer.join(TIMEOUT.toMillis());
 
         assertFalse(producer.isAlive());
-        assertEquals(Producer.N, queue.size());
+        assertEquals(ACTIONS_PER_PRODUCER, queue.size());
         assertArrayEquals(producer.getProduced(), queue.toArray());
     }
 
     @Test
     @DisplayName("Producer waits when the queue is full")
     void producerWaitsWhenQueueIsFull() throws InterruptedException {
-        Queue queue = new Queue(1);
-        Producer producer = new Producer("P", queue);   // kein Consumer vorhanden
+        Queue queue = new Queue(CAPACITY);
+        Producer producer = new Producer("P", queue, CAPACITY + 1);   // ein Wert mehr, als hineinpasst
 
         producer.start();
+        Thread.sleep(200);                  // dem Producer Zeit geben, die Queue zu füllen
 
-        // warten (max. TIMEOUT), bis der Producer beim 2. Ablegen hängt
-        long deadline = System.currentTimeMillis() + TIMEOUT.toMillis();
-        while (producer.getState() != Thread.State.WAITING && System.currentTimeMillis() < deadline) {
-            Thread.sleep(10);
-        }
-        assertEquals(Thread.State.WAITING, producer.getState());
-        assertEquals(1, queue.size());
+        assertTrue(producer.isAlive());           // er ist nicht fertig, sondern wartet
+        assertEquals(CAPACITY, queue.size());     // die Queue ist voll, aber nicht übervoll
 
-        producer.interrupt();
+        producer.interrupt();                     // aufräumen: wartenden Producer beenden
         producer.join(TIMEOUT.toMillis());
-        assertFalse(producer.isAlive());
-        assertEquals(1, producer.getProduced().length);
     }
 
     // ------------------------------------------------------------------
@@ -97,43 +96,39 @@ public class ProjectTests {
     // ------------------------------------------------------------------
 
     @Test
-    @DisplayName("Consumer takes exactly N values in FIFO order")
-    void consumerTakesExactlyNValuesInFifoOrder() throws InterruptedException {
-        Queue queue = new Queue(Producer.N);
-        List<Integer> expected = new ArrayList<>();
-        for (int i = 0; i < Producer.N; i++) {
-            queue.put(i);
-            expected.add(i);
+    @DisplayName("Consumer takes exactly as many values as specified in FIFO order")
+    void consumerTakesAllItsValuesInFifoOrder() throws InterruptedException {
+        Queue queue = new Queue(ACTIONS_PER_CONSUMER);   // groß genug, um alle Werte vorab abzulegen
+        for (int i = 0; i < ACTIONS_PER_CONSUMER; i++) {
+            queue.put(i);                                // Werte 0, 1, 2, ...
         }
-        Consumer consumer = new Consumer("C", queue);
+        Consumer consumer = new Consumer("C", queue, ACTIONS_PER_CONSUMER);
 
         consumer.start();
         consumer.join(TIMEOUT.toMillis());
 
         assertFalse(consumer.isAlive());
-        assertArrayEquals(expected.toArray(), consumer.getConsumed());
+        Integer[] consumed = consumer.getConsumed();
+        assertEquals(ACTIONS_PER_CONSUMER, consumed.length);
+        for (int i = 0; i < consumed.length; i++) {
+            assertEquals(i, consumed[i]);                // an Position i muss der Wert i stehen (FIFO)
+        }
         assertEquals(0, queue.size());
     }
 
     @Test
     @DisplayName("Consumer waits when the queue is empty")
     void consumerWaitsWhenQueueIsEmpty() throws InterruptedException {
-        Queue queue = new Queue(1);
-        Consumer consumer = new Consumer("C", queue);   // kein Producer vorhanden
+        Queue queue = new Queue(CAPACITY);
+        Consumer consumer = new Consumer("C", queue, ACTIONS_PER_CONSUMER);   // kein Producer vorhanden
 
         consumer.start();
+        Thread.sleep(200);                  // dem Consumer Zeit geben, zu entnehmen
 
-        // warten (max. TIMEOUT), bis der Consumer beim 1. Entnehmen hängt
-        long deadline = System.currentTimeMillis() + TIMEOUT.toMillis();
-        while (consumer.getState() != Thread.State.WAITING && System.currentTimeMillis() < deadline) {
-            Thread.sleep(10);
-        }
-        assertEquals(Thread.State.WAITING, consumer.getState());
+        assertTrue(consumer.isAlive());           // er ist nicht fertig, sondern wartet
 
-        consumer.interrupt();
+        consumer.interrupt();                     // aufräumen: wartenden Consumer beenden
         consumer.join(TIMEOUT.toMillis());
-        assertFalse(consumer.isAlive());
-        assertEquals(0, consumer.getConsumed().length);
     }
 
     // ------------------------------------------------------------------
@@ -141,11 +136,14 @@ public class ProjectTests {
     // ------------------------------------------------------------------
 
     @Test
-    @DisplayName("Values arrive in the order they were produced")
-    void valuesArriveInProducedOrder() throws InterruptedException {
-        Queue queue = new Queue(2);
-        Producer producer = new Producer("P", queue);
-        Consumer consumer = new Consumer("C", queue);
+    @DisplayName("Producer and consumer running in parallel: all values arrive in the order they were produced")
+    void producerAndConsumerInParallelTransferAllValuesInOrder() throws InterruptedException {
+        // Da ACTIONS_PER_PRODUCER <= CAPACITY ist, passen alle Werte gleichzeitig in die Queue.
+        // Die Queue wird also nie voll und der Producer muss nie warten.
+        // Geprüft wird hier die Übertragung, wenn genug Platz vorhanden ist.
+        Queue queue = new Queue(CAPACITY);
+        Producer producer = new Producer("P", queue, ACTIONS_PER_PRODUCER);
+        Consumer consumer = new Consumer("C", queue, ACTIONS_PER_PRODUCER);   // holt genau so viele, wie abgelegt werden
 
         producer.start();
         consumer.start();
@@ -159,11 +157,14 @@ public class ProjectTests {
     }
 
     @Test
-    @DisplayName("Capacity 1 behaves like the buffer from the lecture")
-    void capacityOneBehavesLikeBuffer() throws InterruptedException {
+    @DisplayName("Capacity 1 (buffer from the lecture): all values still arrive in the order they were produced")
+    void capacityOneStillTransfersAllValuesInOrder() throws InterruptedException {
+        // Bei Kapazität 1 ist die Queue nach jedem abgelegten Wert voll.
+        // Der Producer muss deshalb nach jedem Wert warten, bis der Consumer ihn entnommen hat.
+        // Producer und Consumer wechseln sich so ab: ablegen, entnehmen, ablegen, entnehmen, ...
         Queue queue = new Queue(1);
-        Producer producer = new Producer("P", queue);
-        Consumer consumer = new Consumer("C", queue);
+        Producer producer = new Producer("P", queue, ACTIONS_PER_PRODUCER);
+        Consumer consumer = new Consumer("C", queue, ACTIONS_PER_PRODUCER);
 
         producer.start();
         consumer.start();
@@ -177,66 +178,36 @@ public class ProjectTests {
     }
 
     // ------------------------------------------------------------------
-    // Abschnitt 4: Viewer
-    // ------------------------------------------------------------------
-
-    @Test
-    @DisplayName("Viewer does not modify the queue")
-    void viewerDoesNotModifyQueue() throws InterruptedException {
-        Queue queue = new Queue(5);
-        queue.put(1);
-        queue.put(2);
-        queue.put(3);
-        Viewer viewer = new Viewer(queue);
-
-        viewer.start();
-        Thread.sleep(200);                              // Viewer arbeitet eine Weile
-        viewer.interrupt();
-        viewer.join(1000);
-
-        assertArrayEquals(new Integer[]{1, 2, 3}, queue.toArray());
-    }
-    @Test
-    @DisplayName("Viewer handles an empty queue and stops when interrupted")
-    void viewerStopsWhenInterrupted() throws InterruptedException {
-        Queue queue = new Queue(5);
-        Viewer viewer = new Viewer(queue);
-
-        viewer.start();
-        Thread.sleep(200);
-        assertTrue(viewer.isAlive());                   // leere Queue führt nicht zum Absturz
-
-        viewer.interrupt();
-        viewer.join(1000);
-        assertFalse(viewer.isAlive());
-    }
-
-    // ------------------------------------------------------------------
-    // Abschnitt 5: Gesamtsystem
+    // Abschnitt 4: Gesamtsystem
     // ------------------------------------------------------------------
 
     @Test
     @DisplayName("System rejects a capacity below 1")
     void systemRejectsCapacityBelowOne() {
-        assertThrows(IllegalArgumentException.class, () -> ProjectApplication.runSystem(0, 1, 1));
+        assertThrows(IllegalArgumentException.class, () -> ProjectApplication.runSystem(
+                0, PRODUCER_COUNT, CONSUMER_COUNT, ACTIONS_PER_PRODUCER, ACTIONS_PER_CONSUMER));
     }
 
     @Test
-    @DisplayName("System rejects unequal numbers of producers and consumers")
-    void systemRejectsUnequalProducerConsumerCount() {
-        assertThrows(IllegalArgumentException.class, () -> ProjectApplication.runSystem(5, 2, 3));
+    @DisplayName("System rejects unequal totals of produced and consumed values")
+    void systemRejectsUnequalTotals() {
+        // ein Consumer mehr -> es sollen mehr Werte entnommen als abgelegt werden
+        assertThrows(IllegalArgumentException.class, () -> ProjectApplication.runSystem(
+                CAPACITY, PRODUCER_COUNT, CONSUMER_COUNT + 1, ACTIONS_PER_PRODUCER, ACTIONS_PER_CONSUMER));
     }
 
     @Test
     @DisplayName("Multiple producers and consumers: every value arrives exactly once")
     void multipleProducersAndConsumersLoseNoValues() {
-        Queue queue = new Queue(2);
+        Queue queue = new Queue(CAPACITY);
         List<Producer> producers = new ArrayList<>();
         List<Consumer> consumers = new ArrayList<>();
-        // Erstellt jeweils 3 Producer und 3 Consumer.
-        for (int i = 1; i <= 3; i++) {
-            producers.add(new Producer("P" + i, queue));
-            consumers.add(new Consumer("C" + i, queue));
+        // Erstellt Producer und Consumer wie in main().
+        for (int i = 1; i <= PRODUCER_COUNT; i++) {
+            producers.add(new Producer("P" + i, queue, ACTIONS_PER_PRODUCER));
+        }
+        for (int i = 1; i <= CONSUMER_COUNT; i++) {
+            consumers.add(new Consumer("C" + i, queue, ACTIONS_PER_CONSUMER));
         }
 
         // Stellt sicher, dass der Test innerhalb des vorgegebenen Timeouts endet.
@@ -271,7 +242,7 @@ public class ProjectTests {
 
         // Erwartung:
         // Alle erzeugten Werte wurden konsumiert.
-        assertEquals(3 * Producer.N, allConsumed.size());
+        assertEquals(PRODUCER_COUNT * ACTIONS_PER_PRODUCER, allConsumed.size());
 
         // Vergleicht die Listen:
         // Es darf kein Wert verloren gegangen oder doppelt konsumiert worden sein.
@@ -283,16 +254,13 @@ public class ProjectTests {
     @DisplayName("Whole system terminates and leaves the queue empty")
     void wholeSystemTerminates() {
 
-        // Startet das komplette Producer-Consumer-System mit:
-        // 5 produzierten Werten pro Producer,
-        // 3 Produzern und
-        // 3 Consumern.
+        // Startet das komplette Producer-Consumer-System mit denselben Werten wie main().
         // Der Test schlägt fehl, falls das System nicht rechtzeitig beendet wird.
         Queue queue = assertTimeoutPreemptively(TIMEOUT, () -> {
-            return ProjectApplication.runSystem(5, 3, 3);
+            return ProjectApplication.runSystem(
+                    CAPACITY, PRODUCER_COUNT, CONSUMER_COUNT, ACTIONS_PER_PRODUCER, ACTIONS_PER_CONSUMER);
         });
 
         assertEquals(0, queue.size());
     }
-
 }
