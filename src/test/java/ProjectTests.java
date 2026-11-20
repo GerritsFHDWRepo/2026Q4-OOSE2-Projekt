@@ -263,4 +263,15 @@ public class ProjectTests {
 
         assertEquals(0, queue.size());
     }
+
+    @Test
+    @DisplayName("System handles 2 producers with 3 actions and 3 consumers with 2 actions")
+    void systemHandlesTwoProducersAndThreeConsumers() {
+        // 2 Producer x 3 Aktionen = 6 Werte, 3 Consumer x 2 Aktionen = 6 Werte
+        Queue queue = assertTimeoutPreemptively(TIMEOUT, () -> {
+            return ProjectApplication.runSystem(CAPACITY, 2, 3, 3, 2);
+        });
+
+        assertEquals(0, queue.size());
+    }
 }
