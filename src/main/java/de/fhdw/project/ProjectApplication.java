@@ -26,15 +26,11 @@ public class ProjectApplication {
                                   int actionAmountProducer, int actionAmountConsumer)
             throws InterruptedException {
 
-        if (capacity <= 0 || producerCount <= 0 || consumerCount <= 0
-                || actionAmountProducer <= 0 || actionAmountConsumer <= 0) {
+        if (producerCount <= 0 || consumerCount <= 0) {
             throw new IllegalArgumentException("Die durchgegebenen Parameter müssen größer als 0 sein.");
         }
 
-        long totalProduced = (long) producerCount * actionAmountProducer;
-        long totalConsumed = (long) consumerCount * actionAmountConsumer;
-
-        if (totalProduced != totalConsumed) {
+        if ((long) producerCount * actionAmountProducer != (long) consumerCount * actionAmountConsumer) {
             throw new IllegalArgumentException("Die Producer und Consumer interagieren unterschiedlich oft mit der Queue.");
         }
 

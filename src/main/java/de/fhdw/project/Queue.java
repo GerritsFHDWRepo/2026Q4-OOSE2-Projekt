@@ -15,6 +15,10 @@ public class Queue {
     private final int capacity;
 
     public Queue(int capacity) {
+        if (capacity <= 0) {
+            throw new IllegalArgumentException("Kapazität muss größer als 0 sein: " + capacity);
+        }
+
         this.queue = new LinkedBlockingQueue<>(capacity);
         this.capacity = capacity;
     }
