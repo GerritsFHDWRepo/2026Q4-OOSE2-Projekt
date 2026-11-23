@@ -15,6 +15,11 @@ public class Producer extends Thread {
 
     public Producer(String name, Queue queue, int actionAmount){
         super(name);
+
+        if (actionAmount <= 0) {
+            throw new IllegalArgumentException("Die Anzahl ausgeführter Aktionen beim Producer muss größer als 0 sein: " + actionAmount);
+        }
+
         this.queue = queue;
         this.actionAmount = actionAmount;
     }
