@@ -76,6 +76,20 @@ public class ProjectTests {
     }
 
     @Test
+    @DisplayName("Producer with exactly as many values as the capacity does not wait")
+    void producerWithExactlyCapacityValuesDoesNotWait() throws InterruptedException {
+        // Grenzwert: genau so viele Werte, wie in die Queue passen
+        Queue queue = new Queue(CAPACITY);
+        Producer producer = new Producer("P", queue, CAPACITY);
+
+        producer.start();
+        producer.join(TIMEOUT.toMillis());
+
+        assertFalse(producer.isAlive());          // er ist fertig, hat also nicht gewartet
+        assertEquals(CAPACITY, queue.size());     // die Queue ist genau voll
+    }
+
+    @Test
     @DisplayName("Producer waits when the queue is full")
     void producerWaitsWhenQueueIsFull() throws InterruptedException {
         Queue queue = new Queue(CAPACITY);
@@ -89,6 +103,19 @@ public class ProjectTests {
 
         producer.interrupt();                     // aufräumen: wartenden Producer beenden
         producer.join(TIMEOUT.toMillis());
+    }
+
+    @Test
+    @DisplayName("Producer stops when interrupted")
+    void producerStopsWhenInterrupted() throws InterruptedException {
+        Queue queue = new Queue(CAPACITY);
+        Producer producer = new Producer("P", queue, CAPACITY + 1);   // ein Wert mehr, als hineinpasst
+
+        producer.start();
+        producer.interrupt();                            // egal ob er schon wartet oder nicht: er soll sich beenden
+        producer.join(TIMEOUT.toMillis());
+
+        assertFalse(producer.isAlive());                 // er hat sich beendet
     }
 
     // ------------------------------------------------------------------
@@ -129,6 +156,20 @@ public class ProjectTests {
 
         consumer.interrupt();                     // aufräumen: wartenden Consumer beenden
         consumer.join(TIMEOUT.toMillis());
+    }
+
+    @Test
+    @DisplayName("Consumer stops when interrupted")
+    void consumerStopsWhenInterrupted() throws InterruptedException {
+        Queue queue = new Queue(CAPACITY);
+        Consumer consumer = new Consumer("C", queue, ACTIONS_PER_CONSUMER);   // kein Producer vorhanden
+
+        consumer.start();
+
+        consumer.interrupt();                            // egal ob er schon wartet oder nicht: er soll sich beenden
+        consumer.join(TIMEOUT.toMillis());
+
+        assertFalse(consumer.isAlive());                 // er hat sich beendet
     }
 
     // ------------------------------------------------------------------
@@ -194,6 +235,37 @@ public class ProjectTests {
         // ein Consumer mehr -> es sollen mehr Werte entnommen als abgelegt werden
         assertThrows(IllegalArgumentException.class, () -> ProjectApplication.runSystem(
                 CAPACITY, PRODUCER_COUNT, CONSUMER_COUNT + 1, ACTIONS_PER_PRODUCER, ACTIONS_PER_CONSUMER));
+    }
+
+    @Test
+    @DisplayName("System rejects more produced than consumed values")
+    void systemRejectsMoreProducedThanConsumed() {
+        // ein Producer mehr -> es sollen mehr Werte abgelegt als entnommen werden
+        assertThrows(IllegalArgumentException.class, () -> ProjectApplication.runSystem(
+                CAPACITY, PRODUCER_COUNT + 1, CONSUMER_COUNT, ACTIONS_PER_PRODUCER, ACTIONS_PER_CONSUMER));
+    }
+
+    @Test
+    @DisplayName("System rejects zero producers")
+    void systemRejectsZeroProducers() {
+        assertThrows(IllegalArgumentException.class, () -> ProjectApplication.runSystem(
+                CAPACITY, 0, CONSUMER_COUNT, ACTIONS_PER_PRODUCER, ACTIONS_PER_CONSUMER));
+    }
+
+    @Test
+    @DisplayName("System rejects zero consumers")
+    void systemRejectsZeroConsumers() {
+        assertThrows(IllegalArgumentException.class, () -> ProjectApplication.runSystem(
+                CAPACITY, PRODUCER_COUNT, 0, ACTIONS_PER_PRODUCER, ACTIONS_PER_CONSUMER));
+    }
+
+    @Test
+    @DisplayName("System rejects zero actions per producer or per consumer")
+    void systemRejectsZeroActions() {
+        assertThrows(IllegalArgumentException.class, () -> ProjectApplication.runSystem(
+                CAPACITY, PRODUCER_COUNT, CONSUMER_COUNT, 0, ACTIONS_PER_CONSUMER));
+        assertThrows(IllegalArgumentException.class, () -> ProjectApplication.runSystem(
+                CAPACITY, PRODUCER_COUNT, CONSUMER_COUNT, ACTIONS_PER_PRODUCER, 0));
     }
 
     @Test
@@ -273,81 +345,5 @@ public class ProjectTests {
         });
 
         assertEquals(0, queue.size());
-    }
-
-    // ------------------------------------------------------------------
-    // Abschnitt 5: Edge Cases
-    // ------------------------------------------------------------------
-
-    @Test
-    @DisplayName("System rejects zero producers")
-    void systemRejectsZeroProducers() {
-        assertThrows(IllegalArgumentException.class, () -> ProjectApplication.runSystem(
-                CAPACITY, 0, CONSUMER_COUNT, ACTIONS_PER_PRODUCER, ACTIONS_PER_CONSUMER));
-    }
-
-    @Test
-    @DisplayName("System rejects zero consumers")
-    void systemRejectsZeroConsumers() {
-        assertThrows(IllegalArgumentException.class, () -> ProjectApplication.runSystem(
-                CAPACITY, PRODUCER_COUNT, 0, ACTIONS_PER_PRODUCER, ACTIONS_PER_CONSUMER));
-    }
-
-    @Test
-    @DisplayName("System rejects zero actions per producer or per consumer")
-    void systemRejectsZeroActions() {
-        assertThrows(IllegalArgumentException.class, () -> ProjectApplication.runSystem(
-                CAPACITY, PRODUCER_COUNT, CONSUMER_COUNT, 0, ACTIONS_PER_CONSUMER));
-        assertThrows(IllegalArgumentException.class, () -> ProjectApplication.runSystem(
-                CAPACITY, PRODUCER_COUNT, CONSUMER_COUNT, ACTIONS_PER_PRODUCER, 0));
-    }
-
-    @Test
-    @DisplayName("System rejects more produced than consumed values")
-    void systemRejectsMoreProducedThanConsumed() {
-        // ein Producer mehr -> es sollen mehr Werte abgelegt als entnommen werden
-        assertThrows(IllegalArgumentException.class, () -> ProjectApplication.runSystem(
-                CAPACITY, PRODUCER_COUNT + 1, CONSUMER_COUNT, ACTIONS_PER_PRODUCER, ACTIONS_PER_CONSUMER));
-    }
-
-    @Test
-    @DisplayName("Producer with exactly as many values as the capacity does not wait")
-    void producerWithExactlyCapacityValuesDoesNotWait() throws InterruptedException {
-        // Grenzwert: genau so viele Werte, wie in die Queue passen
-        Queue queue = new Queue(CAPACITY);
-        Producer producer = new Producer("P", queue, CAPACITY);
-
-        producer.start();
-        producer.join(TIMEOUT.toMillis());
-
-        assertFalse(producer.isAlive());          // er ist fertig, hat also nicht gewartet
-        assertEquals(CAPACITY, queue.size());     // die Queue ist genau voll
-    }
-
-    @Test
-    @DisplayName("Producer stops when interrupted")
-    void producerStopsWhenInterrupted() throws InterruptedException {
-        Queue queue = new Queue(CAPACITY);
-        Producer producer = new Producer("P", queue, CAPACITY + 1);   // ein Wert mehr, als hineinpasst
-
-        producer.start();
-        producer.interrupt();                            // egal ob er schon wartet oder nicht: er soll sich beenden
-        producer.join(TIMEOUT.toMillis());
-
-        assertFalse(producer.isAlive());                 // er hat sich beendet
-    }
-
-    @Test
-    @DisplayName("Consumer stops when interrupted")
-    void consumerStopsWhenInterrupted() throws InterruptedException {
-        Queue queue = new Queue(CAPACITY);
-        Consumer consumer = new Consumer("C", queue, ACTIONS_PER_CONSUMER);   // kein Producer vorhanden
-
-        consumer.start();
-
-        consumer.interrupt();                            // egal ob er schon wartet oder nicht: er soll sich beenden
-        consumer.join(TIMEOUT.toMillis());
-
-        assertFalse(consumer.isAlive());                 // er hat sich beendet
     }
 }
